@@ -13,6 +13,7 @@
       align-items:center;
       min-height:100vh;
       padding:20px;
+      position:relative;
     }
     h1 { margin-bottom:10px; }
     #auth, #lobby, #game, #leaderboard {
@@ -128,12 +129,38 @@
 
     table { width:100%; border-collapse:collapse; margin-top:8px; }
     th, td { border:1px solid #444; padding:4px 6px; text-align:left; }
+
+    #friendsShortcut {
+      position:fixed;
+      right:10px;
+      bottom:10px;
+      background:#2f7fff;
+      color:#fff;
+      border-radius:20px;
+      padding:8px 14px;
+      font-weight:600;
+    }
+
+    #challengesPanel {
+      position:fixed;
+      left:10px;
+      bottom:10px;
+      background:#222;
+      border:1px solid #444;
+      border-radius:8px;
+      padding:8px;
+      max-width:260px;
+      font-size:0.85rem;
+    }
+    #challengesPanel h4 {
+      margin:0 0 4px 0;
+      font-size:0.9rem;
+    }
   </style>
 </head>
 <body>
   <h1>Ultimate Tic Tac Toe Online</h1>
 
-  <!-- AUTH -->
   <div id="auth">
     <h2>Sign in / Register</h2>
     <div>
@@ -145,7 +172,6 @@
     <div id="authStatus"></div>
   </div>
 
-  <!-- LOBBY -->
   <div id="lobby" style="display:none;">
     <h2>Lobby</h2>
     <div>Logged in as: <span id="currentUser"></span></div>
@@ -153,13 +179,11 @@
     <button id="btnCreateGame">Create Game</button>
     <input id="joinGameId" placeholder="Game ID to join" />
     <button id="btnJoinGame">Join Game</button>
-
-    <button onclick="window.location='friends.html'">Friends</button>
+    <button id="btnBotGame">Play vs Bot</button>
 
     <div id="lobbyStatus"></div>
   </div>
 
-  <!-- GAME -->
   <div id="game" style="display:none;">
     <h2>Game</h2>
     <div>Game ID: <span id="gameIdLabel"></span></div>
@@ -167,7 +191,6 @@
     <div class="ultimate-board" id="ultimateBoard"></div>
   </div>
 
-  <!-- LEADERBOARD -->
   <div id="leaderboard">
     <h2>Leaderboard</h2>
     <button id="btnRefreshLeaderboard">Refresh Leaderboard</button>
@@ -177,6 +200,15 @@
       </thead>
       <tbody id="leaderboardBody"></tbody>
     </table>
+  </div>
+
+  <button id="friendsShortcut" style="display:none;">Friends</button>
+
+  <div id="challengesPanel" style="display:none;">
+    <h4>Incoming Challenges</h4>
+    <div id="incomingChallenges"></div>
+    <h4>Outgoing Challenges</h4>
+    <div id="outgoingChallenges"></div>
   </div>
 
 <script>
@@ -264,7 +296,11 @@ document.getElementById("btnLogin").onclick = async () => {
   document.getElementById("lobby").style.display = "block";
   document.getElementById("currentUser").textContent = currentUser;
 
+  document.getElementById("friendsShortcut").style.display = "inline-block";
+  document.getElementById("challengesPanel").style.display = "block";
+
   refreshLeaderboard();
+  pollChallenges();
 };
 
 // LOBBY
@@ -304,6 +340,28 @@ document.getElementById("btnJoinGame").onclick = async () => {
   currentGameId = gameId;
   currentPlayerSymbol = "O";
   startGameUI();
+};
+
+document.getElementById("btnBotGame").onclick = async () => {
+  const res = await fetch("/api/game/bot", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-auth-token": authToken
+    }
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById("lobbyStatus").textContent = data.error;
+    return;
+  }
+  currentGameId = data.gameId;
+  currentPlayerSymbol = "X";
+  startGameUI();
+};
+
+document.getElementById("friendsShortcut").onclick = () => {
+  window.location = "friends.html";
 };
 
 // GAME UI
@@ -474,30 +532,29 @@ function drawWinLine(winner) {
   ];
 
   for (const p of patterns) {
-  if (
-    p.cells[0] &&
-    p.cells[0] !== "D" &&
-    p.cells[0] === p.cells[1] &&
-    p.cells[1] === p.cells[2]
-  ) {
-    const line = document.createElement("div");
-    line.classList.add("win-line", colorClass);
+    if (
+      p.cells[0] &&
+      p.cells[0] !== "D" &&
+      p.cells[0] === p.cells[1] &&
+      p.cells[1] === p.cells[2]
+    ) {
+      const line = document.createElement("div");
+      line.classList.add("win-line", colorClass);
 
-    if (p.type === "horizontal") {
-      line.classList.add("horizontal", `row-${p.row}`);
-    } else if (p.type === "vertical") {
-      line.classList.add("vertical", `col-${p.col}`);
-    } else if (p.type === "diag") {
-      line.classList.add("diag", p.diag);
+      if (p.type === "horizontal") {
+        line.classList.add("horizontal", `row-${p.row}`);
+      } else if (p.type === "vertical") {
+        line.classList.add("vertical", `col-${p.col}`);
+      } else if (p.type === "diag") {
+        line.classList.add("diag", p.diag);
+      }
+
+      ultimateBoardEl.appendChild(line);
+      break;
     }
-
-    ultimateBoardEl.appendChild(line);
-    break;
   }
 }
-}
 
-// RESET LOCAL BOARD
 function resetLocalBoard() {
   gameOver = false;
   for (let r = 0; r < 3; r++) {
@@ -512,7 +569,6 @@ function resetLocalBoard() {
   createBoard();
 }
 
-// SYNC GAME STATE TO SERVER
 async function syncGameState(winner) {
   if (!currentGameId || !authToken) return;
   const state = serializeBoard();
@@ -531,7 +587,6 @@ async function syncGameState(winner) {
   refreshLeaderboard();
 }
 
-// SERIALIZE BOARD
 function serializeBoard() {
   const cells = ultimateBoardEl.querySelectorAll(".cell");
   const data = [];
@@ -545,7 +600,6 @@ function serializeBoard() {
   };
 }
 
-// APPLY SERVER STATE
 function applyBoardState(state) {
   if (!state) return;
   const { cells, smallBoards: sb, bigBoard: bb, currentPlayer, gameOver: go } = state;
@@ -584,7 +638,6 @@ function applyBoardState(state) {
   if (go) disableAllCells();
 }
 
-// POLLING
 async function pollGameState() {
   if (!currentGameId || !authToken) return;
   const res = await fetch(`/api/game/${currentGameId}`, {
@@ -604,14 +657,84 @@ async function refreshLeaderboard() {
   leaderboardBody.innerHTML = "";
   data.forEach(row => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${row.username}</td><td>${row.wins}</td><td>${row.losses}</td>`;
+    tr.innerHTML = `<td class="lb-name" data-user="${row.username}">${row.username}</td><td>${row.wins}</td><td>${row.losses}</td>`;
     leaderboardBody.appendChild(tr);
+  });
+
+  document.querySelectorAll(".lb-name").forEach(td => {
+    td.style.cursor = "pointer";
+    td.onclick = () => {
+      const u = td.dataset.user;
+      window.location = `profile.html?user=${encodeURIComponent(u)}`;
+    };
   });
 }
 
 document.getElementById("btnRefreshLeaderboard").onclick = refreshLeaderboard;
 
-// INITIALIZE
+// CHALLENGES PANEL
+async function pollChallenges() {
+  if (!authToken) return;
+  const res = await fetch("/api/challenge/list", {
+    headers: { "x-auth-token": authToken }
+  });
+  const data = await res.json();
+
+  const incomingDiv = document.getElementById("incomingChallenges");
+  const outgoingDiv = document.getElementById("outgoingChallenges");
+
+  incomingDiv.innerHTML = "";
+  outgoingDiv.innerHTML = "";
+
+  data.incoming.forEach(ch => {
+    const div = document.createElement("div");
+    div.textContent = `${ch.from} (${ch.status}) `;
+    if (ch.status === "pending") {
+      const acceptBtn = document.createElement("button");
+      acceptBtn.textContent = "Accept";
+      acceptBtn.onclick = async () => {
+        const r = await fetch("/api/challenge/accept", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-auth-token": authToken
+          },
+          body: JSON.stringify({ id: ch.id })
+        });
+        const d = await r.json();
+        if (r.ok) {
+          window.location = "/?join=" + d.gameId;
+        }
+      };
+      const declineBtn = document.createElement("button");
+      declineBtn.textContent = "Decline";
+      declineBtn.onclick = async () => {
+        await fetch("/api/challenge/decline", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-auth-token": authToken
+          },
+          body: JSON.stringify({ id: ch.id })
+        });
+        pollChallenges();
+      };
+      div.appendChild(acceptBtn);
+      div.appendChild(declineBtn);
+    }
+    incomingDiv.appendChild(div);
+  });
+
+  data.outgoing.forEach(ch => {
+    const div = document.createElement("div");
+    div.textContent = `To ${ch.to} (${ch.status})`;
+    outgoingDiv.appendChild(div);
+  });
+
+  setTimeout(pollChallenges, 2000);
+}
+
+// INIT
 createBoard();
 </script>
 
