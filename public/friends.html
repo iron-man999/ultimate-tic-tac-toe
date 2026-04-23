@@ -47,7 +47,7 @@
 </div>
 
 <div class="box">
-  <h3>Incoming Requests</h3>
+  <h3>Incoming Friend Requests</h3>
   <div id="incoming"></div>
 </div>
 
@@ -58,6 +58,11 @@
 
 <script>
 const token = localStorage.getItem("authToken");
+
+if (!token) {
+  alert("You must be logged in.");
+  window.location = "/";
+}
 
 async function loadFriends() {
   const res = await fetch("/api/friends/list", {
@@ -72,7 +77,10 @@ async function loadFriends() {
 
   document.getElementById("friends").innerHTML =
     data.friends.map(u =>
-      `<div>${u} <button onclick="challenge('${u}')">Challenge</button></div>`
+      `<div>${u} 
+         <button onclick="challenge('${u}')">Challenge</button>
+         <button onclick="viewProfile('${u}')">Profile</button>
+       </div>`
     ).join("");
 }
 
@@ -98,13 +106,21 @@ async function accept(from) {
 }
 
 async function challenge(friend) {
-  const res = await fetch("/api/friends/challenge", {
+  const res = await fetch("/api/challenge/send", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-auth-token": token },
-    body: JSON.stringify({ friend })
+    body: JSON.stringify({ to: friend })
   });
   const data = await res.json();
-  window.location = "/?join=" + data.gameId;
+  if (!res.ok) {
+    alert(data.error || "Could not send challenge");
+  } else {
+    alert("Challenge sent!");
+  }
+}
+
+function viewProfile(u) {
+  window.location = `profile.html?user=${encodeURIComponent(u)}`;
 }
 
 loadFriends();
