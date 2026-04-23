@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Player Profile</title>
+  <style>
+    body {
+      background:#111;
+      color:#eee;
+      font-family:system-ui;
+      padding:20px;
+    }
+    .card {
+      border:1px solid #444;
+      border-radius:8px;
+      padding:16px;
+      max-width:400px;
+    }
+    .green-button {
+      display:inline-block;
+      margin-top:12px;
+      padding:10px 18px;
+      background:#2ecc71;
+      color:#111;
+      border-radius:20px;
+      font-weight:700;
+      cursor:pointer;
+      border:none;
+    }
+    .green-button:hover {
+      background:#27ae60;
+    }
+    button {
+      margin-top:8px;
+      padding:6px 12px;
+      background:#444;
+      border:none;
+      color:#eee;
+      border-radius:4px;
+      cursor:pointer;
+    }
+    button:hover { background:#666; }
+  </style>
+</head>
+<body>
+
+<h1>Player Profile</h1>
+
+<div id="profile" class="card">
+  <div id="profileContent">Loading...</div>
+</div>
+
+<script>
+const token = localStorage.getItem("authToken");
+const params = new URLSearchParams(window.location.search);
+const username = params.get("user");
+
+if (!username) {
+  document.getElementById("profileContent").textContent = "No user specified.";
+} else {
+  loadProfile();
+}
+
+async function loadProfile() {
+  const res = await fetch(`/api/user/${encodeURIComponent(username)}`);
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById("profileContent").textContent = data.error || "User not found.";
+    return;
+  }
+
+  document.getElementById("profileContent").innerHTML = `
+    <h2>${data.username}</h2>
+    <p>Wins: ${data.wins} | Losses: ${data.losses}</p>
+    <button class="green-button" onclick="challengeUser()">Challenge</button><br/>
+    <button onclick="addFriend()">Add Friend</button>
+  `;
+}
+
+async function challengeUser() {
+  if (!token) {
+    alert("You must be logged in to challenge.");
+    return;
+  }
+  const res = await fetch("/api/challenge/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-auth-token": token },
+    body: JSON.stringify({ to: username })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || "Could not send challenge");
+  } else {
+    alert("Challenge sent!");
+  }
+}
+
+async function addFriend() {
+  if (!token) {
+    alert("You must be logged in to add friends.");
+    return;
+  }
+  const res = await fetch("/api/friends/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-auth-token": token },
+    body: JSON.stringify({ target: username })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || "Could not send friend request");
+  } else {
+    alert("Friend request sent!");
+  }
+}
+</script>
+
+</body>
+</html>
