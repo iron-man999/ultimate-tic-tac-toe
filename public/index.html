@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ultimate Tic Tac Toe Online</title>
+  <style>
+    body {
+      background:#111;
+      color:#eee;
+      font-family: system-ui, sans-serif;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      min-height:100vh;
+      padding:20px;
+    }
+    h1 { margin-bottom:10px; }
+    #auth, #lobby, #game, #leaderboard {
+      margin:10px 0;
+      padding:10px;
+      border:1px solid #444;
+      border-radius:6px;
+      width:90%;
+      max-width:900px;
+    }
+    input {
+      margin:4px;
+      padding:4px 6px;
+      background:#222;
+      border:1px solid #555;
+      color:#eee;
+    }
+    button {
+      margin:4px;
+      padding:6px 10px;
+      background:#444;
+      border:none;
+      color:#eee;
+      cursor:pointer;
+      border-radius:4px;
+    }
+    button:hover { background:#666; }
+
+    .ultimate-board {
+      position:relative;
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      grid-template-rows:repeat(3, 1fr);
+      gap:6px;
+      width:600px;
+      height:600px;
+      margin:10px auto;
+    }
+    .board {
+      position:relative;
+      background:#222;
+      border:3px solid #555;
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      grid-template-rows:repeat(3, 1fr);
+    }
+    .cell {
+      border:1px solid #444;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:2.2rem;
+      cursor:pointer;
+      user-select:none;
+      position:relative;
+      color:#eee;
+    }
+    .cell.disabled { cursor:default; }
+    .cell.x { color:#2f7fff; }
+    .cell.o { color:#ff3b3b; }
+
+    .board::after {
+      content:"";
+      position:absolute;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      font-size:7rem;
+      font-weight:900;
+      text-align:center;
+      pointer-events:none;
+    }
+    .board.big-x::after {
+      display:flex;
+      content:"X";
+      color:#2f7fff;
+    }
+    .board.big-o::after {
+      display:flex;
+      content:"O";
+      color:#ff3b3b;
+    }
+
+    .win-line {
+      position:absolute;
+      background:transparent;
+      pointer-events:none;
+    }
+    .win-line::before {
+      content:"";
+      position:absolute;
+      background:currentColor;
+      border-radius:4px;
+    }
+    .win-line.horizontal.row-0 { top:16.6%; left:5%; width:90%; height:0; }
+    .win-line.horizontal.row-1 { top:50%; left:5%; width:90%; height:0; }
+    .win-line.horizontal.row-2 { top:83.4%; left:5%; width:90%; height:0; }
+    .win-line.horizontal::before { top:-4px; left:0; width:100%; height:8px; }
+
+    .win-line.vertical.col-0 { left:16.6%; top:5%; height:90%; width:0; }
+    .win-line.vertical.col-1 { left:50%; top:5%; height:90%; width:0; }
+    .win-line.vertical.col-2 { left:83.4%; top:5%; height:90%; width:0; }
+    .win-line.vertical::before { left:-4px; top:0; width:8px; height:100%; }
+
+    .win-line.diag.main { top:5%; left:5%; width:90%; height:90%; transform:rotate(45deg); }
+    .win-line.diag.anti { top:5%; left:5%; width:90%; height:90%; transform:rotate(-45deg); }
+    .win-line.diag::before {
+      top:50%; left:0; width:100%; height:8px; transform:translateY(-50%);
+    }
+    .win-line.x { color:#2f7fff; }
+    .win-line.o { color:#ff3b3b; }
+
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th, td { border:1px solid #444; padding:4px 6px; text-align:left; }
+  </style>
+</head>
+<body>
+  <h1>Ultimate Tic Tac Toe Online</h1>
+
+  <div id="auth">
+    <h2>Sign in / Register</h2>
+    <div>
+      <input id="username" placeholder="Username" />
+      <input id="password" type="password" placeholder="Password" />
+      <button id="btnRegister">Register</button>
+      <button id="btnLogin">Login</button>
+    </div>
+    <div id="authStatus"></div>
+  </div>
+
+  <div id="lobby" style="display:none;">
+    <h2>Lobby</h2>
+    <div>Logged in as: <span id="currentUser"></span></div>
+    <button id="btnCreateGame">Create Game</button>
+    <input id="joinGameId" placeholder="Game ID to join" />
+    <button id="btnJoinGame">Join Game</button>
+    <div id="lobbyStatus"></div>
+  </div>
+
+  <div id="game" style="display:none;">
+    <h2>Game</h2>
+    <div>Game ID: <span id="gameIdLabel"></span></div>
+    <div id="status">Current player: X (blue)</div>
+    <div class="ultimate-board" id="ultimateBoard"></div>
+    <button id="resetLocal">Reset Local Board (debug)</button>
+  </div>
+
+  <div id="leaderboard">
+    <h2>Leaderboard</h2>
+    <button id="btnRefreshLeaderboard">Refresh Leaderboard</button>
+    <table>
+      <thead>
+        <tr><th>Username</th><th>Wins</th><th>Losses</th></tr>
+      </thead>
+      <tbody id="leaderboardBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const apiBase = ""; // same origin
+    let authToken = null;
+    let currentUser = null;
+    let currentGameId = null;
+    let currentPlayerSymbol = "X";
+    let gameOver = false;
+
+    const authStatusEl = document.getElementById("authStatus");
+    const lobbyStatusEl = document.getElementById("lobbyStatus");
+    const currentUserEl = document.getElementById("currentUser");
+    const gameIdLabelEl = document.getElementById("gameIdLabel");
+    const statusEl = document.getElementById("status");
+    const ultimateBoardEl = document.getElementById("ultimateBoard");
+    const leaderboardBody = document.getElementById("leaderboardBody");
+
+    const smallBoards = Array.from({ length: 3 }, () =>
+      Array.from({ length: 3 }, () => null)
+    );
+    const bigBoard = Array.from({ length: 3 }, () =>
+      Array.from({ length: 3 }, () => null)
+    );
+
+    // ---------- AUTH ----------
+    document.getElementById("btnRegister").onclick = async () => {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      authStatusEl.textContent = "";
+      try {
+        const res = await fetch(apiBase + "/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Register failed");
+        authStatusEl.textContent = "Registered! Now log in.";
+      } catch (err) {
+        authStatusEl.textContent = err.message;
+      }
+    };
+
+    document.getElementById("btnLogin").onclick = async () => {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      authStatusEl.textContent = "";
+      try {
+        const res = await fetch(apiBase + "/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Login failed");
+        authToken = data.token;
+        currentUser = data.username;
+        currentUserEl.textContent = currentUser;
+        document.getElementById("auth").style.display = "none";
+        document.getElementById("lobby").style.display = "block";
+        refreshLeaderboard();
+      } catch (err) {
+        authStatusEl.textContent = err.message;
+      }
+    };
+
+    // ---------- LOBBY ----------
+    document.getElementById("btnCreateGame").onclick = async () => {
+      lobbyStatusEl.textContent = "";
+      try {
+        const res = await fetch(apiBase + "/api/game/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-auth-token": authToken
+          }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Create game failed");
+        currentGameId = data.gameId;
+        currentPlayerSymbol = "X";
+        startGameUI();
+      } catch (err) {
+        lobbyStatusEl.textContent = err.message;
+      }
+    };
+
+    document.getElementById("btnJoinGame").onclick = async () => {
+      const gameId = document.getElementById("joinGameId").value.trim();
+      if (!gameId) return;
+      lobbyStatusEl.textContent = "";
+      try {
+        const res = await fetch(apiBase + "/api/game/join", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-auth-token": authToken
+          },
+          body: JSON.stringify({ gameId })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Join game failed");
+        currentGameId = gameId;
+        currentPlayerSymbol = "O";
+        startGameUI();
+      } catch (err) {
+        lobbyStatusEl.textContent = err.message;
+      }
+    };
+
+    function startGameUI() {
+      document.getElementById("lobby").style.display = "none";
+      document.getElementById("game").style.display = "block";
+      gameIdLabelEl.textContent = currentGameId;
+      resetLocalBoard();
+      pollGameState();
+    }
+
+    // ---------- GAME LOGIC ----------
+    function createBoard() {
+      ultimateBoardEl.innerHTML = "";
+      for (let br = 0; br < 3; br++) {
+        for (let bc = 0; bc < 3; bc++) {
+          const board = document.createElement("div");
+          board.classList.add("board");
+          board.dataset.br = br;
+          board.dataset.bc = bc;
+
+          for (let cr = 0; cr < 3; cr++) {
+            for (let cc = 0; cc < 3; cc++) {
+              const cell = document.createElement("div");
+              cell.classList.add("cell");
+              cell.dataset.br = br;
+              cell.dataset.bc = bc;
+              cell.dataset.cr = cr;
+              cell.dataset.cc = cc;
+              cell.addEventListener("click", onCellClick);
+              board.appendChild(cell);
+            }
+          }
+          ultimateBoardEl.appendChild(board);
+        }
+      }
+    }
+
+    function onCellClick(e) {
+      if (gameOver) return;
+      const cell = e.currentTarget;
+      if (cell.textContent) return;
+
+      const currentTurn = statusEl.dataset.currentPlayer || "X";
+      if (currentTurn !== currentPlayerSymbol) return;
+
+      const br = parseInt(cell.dataset.br, 10);
+      const bc = parseInt(cell.dataset.bc, 10);
+      if (smallBoards[br][bc]) return;
+
+      cell.textContent = currentTurn;
+      cell.classList.add(currentTurn.toLowerCase());
+
+      const boardEl = getBoardElement(br, bc);
+      const smallWinner = checkSmallBoardWinner(boardEl);
+      if (smallWinner) {
+        smallBoards[br][bc] = smallWinner;
+        if (smallWinner === "X" || smallWinner === "O") {
+          bigBoard[br][bc] = smallWinner;
+          boardEl.classList.add(smallWinner === "X" ? "big-x" : "big-o");
+        } else {
+          bigBoard[br][bc] = "D";
+        }
+
+        const bigWinner = checkBigBoardWinner();
+        if (bigWinner === "X" || bigWinner === "O") {
+          gameOver = true;
+          statusEl.textContent = `Player ${bigWinner} wins the game!`;
+          drawWinLine(bigWinner);
+          disableAllCells();
+          syncGameState(bigWinner);
+          return;
+        }
+      }
+
+      if (isBigBoardFull() && !gameOver) {
+        gameOver = true;
+        statusEl.textContent = "Game ends in a draw.";
+        disableAllCells();
+        syncGameState(null);
+        return;
+      }
+
+      const nextPlayer = currentTurn === "X" ? "O" : "X";
+      statusEl.dataset.currentPlayer = nextPlayer;
+      statusEl.textContent =
+        `Current player: ${nextPlayer} ` +
+        (nextPlayer === "X" ? "(blue)" : "(red)");
+
+      syncGameState(null);
+    }
+
+    function getBoardElement(br, bc) {
+      return ultimateBoardEl.querySelector(
+        `.board[data-br="${br}"][data-bc="${bc}"]`
+      );
+    }
+
+    function checkSmallBoardWinner(boardEl) {
+      const cells = Array.from(boardEl.querySelectorAll(".cell"));
+      const grid = Array.from({ length: 3 }, () => Array(3).fill(""));
+
+      cells.forEach((cell) => {
+        const cr = parseInt(cell.dataset.cr, 10);
+        const cc = parseInt(cell.dataset.cc, 10);
+        grid[cr][cc] = cell.textContent;
+      });
+
+      const lines = [
+        [grid[0][0], grid[0][1], grid[0][2]],
+        [grid[1][0], grid[1][1], grid[1][2]],
+        [grid[2][0], grid[2][1], grid[2][2]],
+        [grid[0][0], grid[1][0], grid[2][0]],
+        [grid[0][1], grid[1][1], grid[2][1]],
+        [grid[0][2], grid[1][2], grid[2][2]],
+        [grid[0][0], grid[1][1], grid[2][2]],
+        [grid[0][2], grid[1][1], grid[2][0]],
+      ];
+
+      for (const line of lines) {
+        if (line[0] && line[0] === line[1] && line[1] === line[2]) {
+          return line[0];
+        }
+      }
+
+      const allFilled = cells.every((c) => c.textContent);
+      if (allFilled) return "D";
+      return null;
+    }
+
+    function checkBigBoardWinner() {
+      const b = bigBoard;
+      const lines = [
+        [b[0][0], b[0][1], b[0][2]],
+        [b[1][0], b[1][1], b[1][2]],
+        [b[2][0], b[2][1], b[2][2]],
+        [b[0][0], b[1][0], b[2][0]],
+        [b[0][1], b[1][1], b[2][1]],
+        [b[0][2], b[1][2], b[2][2]],
+        [b[0][0], b[1][1], b[2][2]],
+        [b[0][2], b[1][1], b[2][0]],
+      ];
+      for (const line of lines) {
+        if (line[0] && line[0] !== "D" && line[0] === line[1] && line[1] === line[2]) {
+          return line[0];
+        }
+      }
+      return null;
+    }
+
+    function isBigBoardFull() {
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (!bigBoard[r][c]) return false;
+        }
+      }
+      return true;
+    }
+
+    function disableAllCells() {
+      const cells = ultimateBoardEl.querySelectorAll(".cell");
+      cells.forEach((cell) => cell.classList.add("disabled"));
+    }
+
+    function clearWinLines() {
+      const lines = ultimateBoardEl.querySelectorAll(".win-line");
+      lines.forEach((l) => l.remove());
+    }
+
+    function drawWinLine(winner) {
+      const b = bigBoard;
+      const colorClass = winner.toLowerCase();
+      const patterns = [
+        { type: "horizontal", row: 0, cells: [b[0][0], b[0][1], b[0][2]] },
+        { type: "horizontal", row: 1, cells: [b[1][0], b[1][1], b[1][2]] },
+        { type: "horizontal", row: 2, cells: [b[2][0], b[2][1], b[2][2]] },
+        { type: "vertical", col: 0, cells: [b[0][0], b[1][0], b[2][0]] },
+        { type: "vertical", col: 1, cells: [b[0][1], b[1][1], b[2][1]] },
+        { type: "vertical", col: 2, cells: [b[0][2], b[1][2], b[2][2]] },
+        { type: "diag", diag: "main", cells: [b[0][0], b[1][1], b[2][2]] },
+        { type: "diag", diag: "anti", cells: [b[0][2], b[1][1], b[2][0]] },
+      ];
+
+      for (const p of patterns) {
+        if (
+          p.cells[0] &&
+          p.cells[0] !== "D" &&
+          p.cells[0] === p.cells[1] &&
+          p.cells[1] === p.cells[2]
+        ) {
+          const line = document.createElement("div");
+          line.classList.add("win-line", colorClass);
+          if (p.type === "horizontal") {
+            line.classList.add("horizontal", `row-${p.row}`);
+          } else if (p.type === "vertical") {
+            line.classList.add("vertical", `col-${p.col}`);
+          } else if (p.type === "diag") {
+            line.classList.add("diag", p.diag);
+          }
+          ultimateBoardEl.appendChild(line);
+          break;
+        }
+      }
+    }
+
+    function resetLocalBoard() {
+      gameOver = false;
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          smallBoards[r][c] = null;
+          bigBoard[r][c] = null;
+        }
+      }
+      statusEl.textContent = "Current player: X (blue)";
+      statusEl.dataset.currentPlayer = "X";
+      clearWinLines();
+      createBoard();
+    }
+
+    document.getElementById("resetLocal").onclick = resetLocalBoard;
+
+    // ---------- SYNC WITH SERVER ----------
+    function serializeBoard() {
+      const cells = ultimateBoardEl.querySelectorAll(".cell");
+      const data = [];
+      cells.forEach(c => data.push(c.textContent || ""));
+      return {
+        cells: data,
+        smallBoards,
+        bigBoard,
+        currentPlayer: statusEl.dataset.currentPlayer || "X",
+        gameOver
+      };
+    }
+
+    function applyBoardState(state) {
+      if (!state) return;
+      const { cells, smallBoards: sb, bigBoard: bb, currentPlayer, gameOver: go } = state;
+      if (!cells) return;
+      const cellEls = ultimateBoardEl.querySelectorAll(".cell");
+      cellEls.forEach((c, i) => {
+        const val = cells[i];
+        c.textContent = val;
+        c.classList.remove("x", "o");
+        if (val === "X") c.classList.add("x");
+        if (val === "O") c.classList.add("o");
+      });
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          smallBoards[r][c] = sb[r][c];
+          bigBoard[r][c] = bb[r][c];
+          const boardEl = getBoardElement(r, c);
+          boardEl.classList.remove("big-x", "big-o");
+          if (bb[r][c] === "X") boardEl.classList.add("big-x");
+          if (bb[r][c] === "O") boardEl.classList.add("big-o");
+        }
+      }
+      clearWinLines();
+      const bigWinner = checkBigBoardWinner();
+      if (bigWinner) {
+        drawWinLine(bigWinner);
+      }
+      statusEl.dataset.currentPlayer = currentPlayer;
+      statusEl.textContent =
+        go
+          ? (bigWinner ? `Player ${bigWinner} wins the game!` : "Game ends in a draw.")
+          : `Current player: ${currentPlayer} ` +
+            (currentPlayer === "X" ? "(blue)" : "(red)");
+      gameOver = go;
+      if (go) disableAllCells();
+    }
+
+    async function syncGameState(winner) {
+      if (!currentGameId || !authToken) return;
+      const state = serializeBoard();
+      try {
+        await fetch(apiBase + `/api/game/${currentGameId}/state`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-auth-token": authToken
+          },
+          body: JSON.stringify({
+            boardState: state,
+            currentPlayer: state.currentPlayer,
+            winner: winner
+          })
+        });
+        refreshLeaderboard();
+      } catch (err) {
+        console.error("Sync failed", err);
+      }
+    }
+
+    async function pollGameState() {
+      if (!currentGameId || !authToken) return;
+      try {
+        const res = await fetch(apiBase + `/api/game/${currentGameId}`, {
+          headers: { "x-auth-token": authToken }
+        });
+        const data = await res.json();
+        if (res.ok && data.boardState) {
+          applyBoardState(data.boardState);
+        }
+      } catch (err) {
+        console.error("Poll failed", err);
+      }
+      setTimeout(pollGameState, 1000);
+    }
+
+    // ---------- LEADERBOARD ----------
+    async function refreshLeaderboard() {
+      try {
+        const res = await fetch(apiBase + "/api/leaderboard");
+        const data = await res.json();
+        leaderboardBody.innerHTML = "";
+        data.forEach(row => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${row.username}</td><td>${row.wins}</td><td>${row.losses}</td>`;
+          leaderboardBody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error("Leaderboard error", err);
+      }
+    }
+
+    document.getElementById("btnRefreshLeaderboard").onclick = refreshLeaderboard;
+
+    // Initial local board
+    createBoard();
+  </script>
+</body>
+</html>
