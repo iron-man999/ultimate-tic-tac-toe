@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Friends</title>
+  <style>
+    body {
+      background:#111;
+      color:#eee;
+      font-family:system-ui;
+      padding:20px;
+    }
+    input {
+      background:#222;
+      border:1px solid #555;
+      color:#eee;
+      padding:6px;
+      margin-top:6px;
+    }
+    button {
+      background:#444;
+      border:none;
+      color:#eee;
+      padding:6px 12px;
+      margin-left:6px;
+      cursor:pointer;
+      border-radius:4px;
+    }
+    button:hover { background:#666; }
+    .box {
+      margin-top:20px;
+      padding:10px;
+      border:1px solid #444;
+      border-radius:6px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Friends</h1>
+
+<div class="box">
+  <h3>Add Friend</h3>
+  <input id="friendName" placeholder="Username">
+  <button onclick="sendRequest()">Send Request</button>
+  <div id="reqStatus"></div>
+</div>
+
+<div class="box">
+  <h3>Incoming Requests</h3>
+  <div id="incoming"></div>
+</div>
+
+<div class="box">
+  <h3>Your Friends</h3>
+  <div id="friends"></div>
+</div>
+
+<script>
+const token = localStorage.getItem("authToken");
+
+async function loadFriends() {
+  const res = await fetch("/api/friends/list", {
+    headers: { "x-auth-token": token }
+  });
+  const data = await res.json();
+
+  document.getElementById("incoming").innerHTML =
+    data.incoming.map(u =>
+      `<div>${u} <button onclick="accept('${u}')">Accept</button></div>`
+    ).join("");
+
+  document.getElementById("friends").innerHTML =
+    data.friends.map(u =>
+      `<div>${u} <button onclick="challenge('${u}')">Challenge</button></div>`
+    ).join("");
+}
+
+async function sendRequest() {
+  const target = document.getElementById("friendName").value;
+  const res = await fetch("/api/friends/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-auth-token": token },
+    body: JSON.stringify({ target })
+  });
+  const data = await res.json();
+  document.getElementById("reqStatus").textContent = data.error || "Request sent";
+  loadFriends();
+}
+
+async function accept(from) {
+  await fetch("/api/friends/accept", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-auth-token": token },
+    body: JSON.stringify({ from })
+  });
+  loadFriends();
+}
+
+async function challenge(friend) {
+  const res = await fetch("/api/friends/challenge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-auth-token": token },
+    body: JSON.stringify({ friend })
+  });
+  const data = await res.json();
+  window.location = "/?join=" + data.gameId;
+}
+
+loadFriends();
+</script>
+
+</body>
+</html>
