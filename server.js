@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const path = require("path");
 const bodyParser = require("body-parser");
@@ -10,12 +9,12 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// In-memory "database"
-const users = {};    // username -> { username, password, wins, losses }
-const sessions = {}; // token -> username
-const games = {};    // gameId -> { id, players: [u1,u2], boardState, currentPlayer, winner }
+// In-memory database
+const users = {};    
+const sessions = {}; 
+const games = {};    
 
-// Simple auth middleware
+// Auth middleware
 function auth(req, res, next) {
   const token = req.headers["x-auth-token"];
   if (!token || !sessions[token]) {
@@ -31,7 +30,16 @@ app.post("/api/register", (req, res) => {
   if (!username || !password) return res.status(400).json({ error: "Missing fields" });
   if (users[username]) return res.status(400).json({ error: "Username already exists" });
 
-  users[username] = { username, password, wins: 0, losses: 0 };
+  users[username] = { 
+    username, 
+    password, 
+    wins: 0, 
+    losses: 0,
+    friends: [],
+    incoming: [],
+    outgoing: []
+  };
+
   return res.json({ success: true });
 });
 
@@ -89,7 +97,6 @@ app.post("/api/game/:id/state", auth, (req, res) => {
   game.currentPlayer = currentPlayer;
   game.winner = winner || null;
 
-  // Update leaderboard when game ends
   if (winner && game.players.length === 2) {
     const [p1, p2] = game.players;
     if (winner === "X") {
@@ -111,6 +118,85 @@ app.get("/api/leaderboard", (req, res) => {
     .sort((a, b) => b.wins - a.wins);
   res.json(list);
 });
+
+// FRIEND SYSTEM -------------------------------------
+
+// Send friend request
+app.post("/api/friends/request", auth, (req, res) => {
+  const { target } = req.body;
+  const sender = req.username;
+
+  if (!users[target]) return res.status(404).json({ error: "User not found" });
+  if (target === sender) return res.status(400).json({ error: "Cannot friend yourself" });
+
+  const u = users[sender];
+  const t = users[target];
+
+  if (u.friends.includes(target)) {
+    return res.status(400).json({ error: "Already friends" });
+  }
+
+  if (!t.incoming.includes(sender)) {
+    t.incoming.push(sender);
+    u.outgoing.push(target);
+  }
+
+  res.json({ success: true });
+});
+
+// Accept friend request
+app.post("/api/friends/accept", auth, (req, res) => {
+  const { from } = req.body;
+  const receiver = req.username;
+
+  const r = users[receiver];
+  const f = users[from];
+
+  if (!f || !r.incoming.includes(from)) {
+    return res.status(400).json({ error: "No request from this user" });
+  }
+
+  r.incoming = r.incoming.filter(u => u !== from);
+  f.outgoing = f.outgoing.filter(u => u !== receiver);
+
+  r.friends.push(from);
+  f.friends.push(receiver);
+
+  res.json({ success: true });
+});
+
+// Get friend list
+app.get("/api/friends/list", auth, (req, res) => {
+  const u = users[req.username];
+  res.json({
+    friends: u.friends,
+    incoming: u.incoming,
+    outgoing: u.outgoing
+  });
+});
+
+// Challenge a friend
+app.post("/api/friends/challenge", auth, (req, res) => {
+  const { friend } = req.body;
+  const user = req.username;
+
+  if (!users[user].friends.includes(friend)) {
+    return res.status(400).json({ error: "Not friends" });
+  }
+
+  const id = uuidv4();
+  games[id] = {
+    id,
+    players: [user, friend],
+    boardState: null,
+    currentPlayer: "X",
+    winner: null
+  };
+
+  res.json({ gameId: id });
+});
+
+// ----------------------------------------------------
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
