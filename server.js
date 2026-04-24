@@ -8,21 +8,17 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-const users = {};      // username -> { username, password, wins, losses, friends, friendIncoming, friendOutgoing, challengeIncoming, challengeOutgoing }
-const sessions = {};   // token -> username
-const games = {};      // gameId -> { id, players, boardState, currentPlayer, winner, expiresAt }
-const challenges = {}; // challengeId -> { id, from, to, status, gameId: optional }
+const users = {};
+const sessions = {};
+const games = {};
+const challenges = {};
 
-// ---------- HELPERS ----------
 function shortId() {
-  return Math.random().toString(36).substring(2, 12); // 10 chars
+  return Math.random().toString(36).substring(2, 12);
 }
-
 function isExpired(game) {
   return game.expiresAt && game.expiresAt < Date.now();
 }
-
-// ---------- AUTH MIDDLEWARE ----------
 function auth(req, res, next) {
   const token = req.headers["x-auth-token"];
   if (!token || !sessions[token]) {
@@ -32,7 +28,6 @@ function auth(req, res, next) {
   next();
 }
 
-// ---------- AUTH ROUTES ----------
 app.post("/api/register", (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Missing fields" });
@@ -64,7 +59,6 @@ app.post("/api/login", (req, res) => {
   res.json({ token, username });
 });
 
-// ---------- GAME ROUTES ----------
 app.post("/api/game/create", auth, (req, res) => {
   const id = shortId();
   games[id] = {
@@ -73,7 +67,7 @@ app.post("/api/game/create", auth, (req, res) => {
     boardState: null,
     currentPlayer: "X",
     winner: null,
-    expiresAt: Date.now() + 2 * 60 * 1000 // 2 minutes
+    expiresAt: Date.now() + 2 * 60 * 1000
   };
   res.json({ gameId: id });
 });
@@ -107,7 +101,6 @@ app.get("/api/game/:id", auth, (req, res) => {
   res.json(game);
 });
 
-// BOT helper
 function botMove(game) {
   if (game.winner) return;
   const state = game.boardState;
@@ -124,7 +117,6 @@ function botMove(game) {
   state.currentPlayer = "X";
 }
 
-// update game state
 app.post("/api/game/:id/state", auth, (req, res) => {
   const game = games[req.params.id];
   if (!game) return res.status(404).json({ error: "Game not found" });
@@ -139,7 +131,6 @@ app.post("/api/game/:id/state", auth, (req, res) => {
   game.currentPlayer = currentPlayer;
   game.winner = winner || null;
 
-  // scoring
   if (winner && game.players.length === 2) {
     const [p1, p2] = game.players;
     if (winner === "X") {
@@ -151,7 +142,6 @@ app.post("/api/game/:id/state", auth, (req, res) => {
     }
   }
 
-  // bot move if needed
   if (game.players.includes("BOT") && currentPlayer === "O" && !winner) {
     botMove(game);
   }
@@ -159,7 +149,6 @@ app.post("/api/game/:id/state", auth, (req, res) => {
   res.json({ success: true });
 });
 
-// play vs bot
 app.post("/api/game/bot", auth, (req, res) => {
   const id = shortId();
   games[id] = {
@@ -173,7 +162,6 @@ app.post("/api/game/bot", auth, (req, res) => {
   res.json({ gameId: id });
 });
 
-// ---------- LEADERBOARD ----------
 app.get("/api/leaderboard", (req, res) => {
   const list = Object.values(users)
     .map(u => ({ username: u.username, wins: u.wins, losses: u.losses }))
@@ -181,7 +169,6 @@ app.get("/api/leaderboard", (req, res) => {
   res.json(list);
 });
 
-// ---------- FRIEND SYSTEM ----------
 app.post("/api/friends/request", auth, (req, res) => {
   const { target } = req.body;
   const sender = req.username;
@@ -232,7 +219,6 @@ app.get("/api/friends/list", auth, (req, res) => {
   });
 });
 
-// ---------- CHALLENGE SYSTEM ----------
 app.post("/api/challenge/send", auth, (req, res) => {
   const { to } = req.body;
   const from = req.username;
@@ -290,7 +276,6 @@ app.get("/api/challenge/list", auth, (req, res) => {
   res.json({ incoming, outgoing });
 });
 
-// ---------- USER PROFILE ----------
 app.get("/api/user/:username", (req, res) => {
   const u = users[req.params.username];
   if (!u) return res.status(404).json({ error: "User not found" });
