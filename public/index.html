@@ -4,9 +4,21 @@
   <meta charset="UTF-8" />
   <title>Ultimate Tic Tac Toe Online</title>
   <style>
+    :root {
+      --bg: #111;
+      --text: #eee;
+      --panel: #222;
+      --border: #444;
+      --accent: #2f7fff;
+      --x-color: #2f7fff;
+      --o-color: #ff3b3b;
+      --button-bg: #444;
+      --button-hover: #666;
+    }
+
     body {
-      background:#111;
-      color:#eee;
+      background: var(--bg);
+      color: var(--text);
       font-family: system-ui, sans-serif;
       display:flex;
       flex-direction:column;
@@ -19,40 +31,29 @@
     #auth, #lobby, #game, #leaderboard {
       margin:10px 0;
       padding:10px;
-      border:1px solid #444;
+      border:1px solid var(--border);
       border-radius:6px;
       width:90%;
       max-width:900px;
+      background: var(--panel);
     }
-    :root {
-  --bg: #111;
-  --text: #eee;
-  --panel: #222;
-  --border: #444;
-  --accent: #2f7fff;
-  --x-color: #2f7fff;
-  --o-color: #ff3b3b;
-  --button-bg: #444;
-  --button-hover: #666;
-}
-
     input {
       margin:4px;
       padding:4px 6px;
-      background:#222;
-      border:1px solid #555;
-      color:#eee;
+      background:var(--bg);
+      border:1px solid var(--border);
+      color:var(--text);
     }
     button {
       margin:4px;
       padding:6px 10px;
-      background:#444;
+      background:var(--button-bg);
       border:none;
-      color:#eee;
+      color:var(--text);
       cursor:pointer;
       border-radius:4px;
     }
-    button:hover { background:#666; }
+    button:hover { background:var(--button-hover); }
 
     .ultimate-board {
       position:relative;
@@ -66,14 +67,14 @@
     }
     .board {
       position:relative;
-      background:#222;
-      border:3px solid #555;
+      background:var(--bg);
+      border:3px solid var(--border);
       display:grid;
       grid-template-columns:repeat(3, 1fr);
       grid-template-rows:repeat(3, 1fr);
     }
     .cell {
-      border:1px solid #444;
+      border:1px solid var(--border);
       display:flex;
       align-items:center;
       justify-content:center;
@@ -81,11 +82,11 @@
       cursor:pointer;
       user-select:none;
       position:relative;
-      color:#eee;
+      color:var(--text);
     }
     .cell.disabled { cursor:default; }
-    .cell.x { color:#2f7fff; }
-    .cell.o { color:#ff3b3b; }
+    .cell.x { color:var(--x-color); }
+    .cell.o { color:var(--o-color); }
 
     .board::after {
       content:"";
@@ -102,12 +103,12 @@
     .board.big-x::after {
       display:flex;
       content:"X";
-      color:#2f7fff;
+      color:var(--x-color);
     }
     .board.big-o::after {
       display:flex;
       content:"O";
-      color:#ff3b3b;
+      color:var(--o-color);
     }
 
     .win-line {
@@ -136,17 +137,17 @@
     .win-line.diag::before {
       top:50%; left:0; width:100%; height:8px; transform:translateY(-50%);
     }
-    .win-line.x { color:#2f7fff; }
-    .win-line.o { color:#ff3b3b; }
+    .win-line.x { color:var(--x-color); }
+    .win-line.o { color:var(--o-color); }
 
     table { width:100%; border-collapse:collapse; margin-top:8px; }
-    th, td { border:1px solid #444; padding:4px 6px; text-align:left; }
+    th, td { border:1px solid var(--border); padding:4px 6px; text-align:left; }
 
     #friendsShortcut {
       position:fixed;
       right:10px;
       bottom:10px;
-      background:#2f7fff;
+      background:var(--accent);
       color:#fff;
       border-radius:20px;
       padding:8px 14px;
@@ -157,8 +158,8 @@
       position:fixed;
       left:10px;
       bottom:10px;
-      background:#222;
-      border:1px solid #444;
+      background:var(--panel);
+      border:1px solid var(--border);
       border-radius:8px;
       padding:8px;
       max-width:260px;
@@ -658,6 +659,9 @@ async function pollGameState() {
   const data = await res.json();
   if (res.ok && data.boardState) {
     applyBoardState(data.boardState);
+  } else if (!res.ok && data.error === "Game expired") {
+    alert("This game has expired.");
+    window.location = "/";
   }
   setTimeout(pollGameState, 1000);
 }
@@ -716,6 +720,8 @@ async function pollChallenges() {
         const d = await r.json();
         if (r.ok) {
           window.location = "/?join=" + d.gameId;
+        } else {
+          alert(d.error || "Could not accept challenge");
         }
       };
       const declineBtn = document.createElement("button");
