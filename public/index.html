@@ -5,7 +5,7 @@
   <title>Ultimate Tic Tac Toe Online</title>
   <style>
     :root {
-      --bg: #111;
+      --bg: #111111;
       --text: #eee;
       --panel: #222;
       --border: #444;
@@ -26,7 +26,21 @@
       min-height:100vh;
       padding:20px;
       position:relative;
+      transition: background 0.6s ease; /* smooth change */
     }
+
+    /* animated gradient when enabled */
+    body.animated-bg {
+      background: linear-gradient(120deg, #ff6b6b, #2f7fff, #2ecc71, #f1c40f);
+      background-size: 400% 400%;
+      animation: bgShift 12s ease infinite;
+    }
+    @keyframes bgShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
     h1 { margin-bottom:10px; }
     #auth, #lobby, #game, #leaderboard {
       margin:10px 0;
@@ -169,6 +183,14 @@
       margin:0 0 4px 0;
       font-size:0.9rem;
     }
+
+    #themeControls {
+      margin-top:8px;
+      font-size:0.9rem;
+    }
+    #themeControls label {
+      margin-right:6px;
+    }
   </style>
 </head>
 <body>
@@ -193,6 +215,23 @@
     <input id="joinGameId" placeholder="Game ID to join" />
     <button id="btnJoinGame">Join Game</button>
     <button id="btnBotGame">Play vs Bot</button>
+
+    <div id="themeControls">
+      <div>
+        <label>Background:</label>
+        <input type="color" id="bgPicker" value="#111111">
+        <label>X:</label>
+        <input type="color" id="xPicker" value="#2f7fff">
+        <label>O:</label>
+        <input type="color" id="oPicker" value="#ff3b3b">
+      </div>
+      <div style="margin-top:4px;">
+        <label>
+          <input type="checkbox" id="animateBgToggle">
+          Animated background
+        </label>
+      </div>
+    </div>
 
     <div id="lobbyStatus"></div>
   </div>
@@ -242,10 +281,8 @@ const bigBoard = Array.from({ length: 3 }, () =>
   Array.from({ length: 3 }, () => null)
 );
 
-// AUTO-JOIN SUPPORT
 const urlParams = new URLSearchParams(window.location.search);
 const joinId = urlParams.get("join");
-
 if (joinId) {
   const wait = setInterval(() => {
     if (authToken) {
@@ -274,7 +311,6 @@ async function joinGameByLink(gameId) {
   }
 }
 
-// AUTH
 document.getElementById("btnRegister").onclick = async () => {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value.trim();
@@ -316,7 +352,6 @@ document.getElementById("btnLogin").onclick = async () => {
   pollChallenges();
 };
 
-// LOBBY
 document.getElementById("btnCreateGame").onclick = async () => {
   const res = await fetch("/api/game/create", {
     method: "POST",
@@ -377,7 +412,6 @@ document.getElementById("friendsShortcut").onclick = () => {
   window.location = "friends.html";
 };
 
-// GAME UI
 function startGameUI() {
   document.getElementById("lobby").style.display = "none";
   document.getElementById("game").style.display = "block";
@@ -386,7 +420,6 @@ function startGameUI() {
   pollGameState();
 }
 
-// GAME LOGIC
 function createBoard() {
   ultimateBoardEl.innerHTML = "";
   for (let br = 0; br < 3; br++) {
@@ -666,7 +699,6 @@ async function pollGameState() {
   setTimeout(pollGameState, 1000);
 }
 
-// LEADERBOARD
 async function refreshLeaderboard() {
   const res = await fetch("/api/leaderboard");
   const data = await res.json();
@@ -688,7 +720,6 @@ async function refreshLeaderboard() {
 
 document.getElementById("btnRefreshLeaderboard").onclick = refreshLeaderboard;
 
-// CHALLENGES PANEL
 async function pollChallenges() {
   if (!authToken) return;
   const res = await fetch("/api/challenge/list", {
@@ -752,8 +783,50 @@ async function pollChallenges() {
   setTimeout(pollChallenges, 2000);
 }
 
-// INIT
+// THEME + COLOR PICKERS
+function setupColorPicker(inputId, variableName, storageKey) {
+  const picker = document.getElementById(inputId);
+  if (!picker) return;
+
+  const saved = localStorage.getItem(storageKey);
+  if (saved) {
+    document.documentElement.style.setProperty(variableName, saved);
+    picker.value = saved;
+  }
+
+  picker.addEventListener("input", (e) => {
+    const color = e.target.value;
+    document.documentElement.style.setProperty(variableName, color);
+    localStorage.setItem(storageKey, color);
+  });
+}
+
+function setupAnimatedBackgroundToggle() {
+  const toggle = document.getElementById("animateBgToggle");
+  if (!toggle) return;
+
+  const saved = localStorage.getItem("animatedBg");
+  if (saved === "true") {
+    document.body.classList.add("animated-bg");
+    toggle.checked = true;
+  }
+
+  toggle.addEventListener("change", () => {
+    if (toggle.checked) {
+      document.body.classList.add("animated-bg");
+      localStorage.setItem("animatedBg", "true");
+    } else {
+      document.body.classList.remove("animated-bg");
+      localStorage.setItem("animatedBg", "false");
+    }
+  });
+}
+
 createBoard();
+setupColorPicker("bgPicker", "--bg", "bgColor");
+setupColorPicker("xPicker", "--x-color", "xColor");
+setupColorPicker("oPicker", "--o-color", "oColor");
+setupAnimatedBackgroundToggle();
 </script>
 
 </body>
