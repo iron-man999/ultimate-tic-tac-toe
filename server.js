@@ -1,7 +1,6 @@
 const express = require("express");
 const path = require("path");
 const bodyParser = require("body-parser");
-const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,8 +10,17 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const users = {};      // username -> { username, password, wins, losses, friends, friendIncoming, friendOutgoing, challengeIncoming, challengeOutgoing }
 const sessions = {};   // token -> username
-const games = {};      // gameId -> { id, players, boardState, currentPlayer, winner }
+const games = {};      // gameId -> { id, players, boardState, currentPlayer, winner, expiresAt }
 const challenges = {}; // challengeId -> { id, from, to, status, gameId: optional }
+
+// ---------- HELPERS ----------
+function shortId() {
+  return Math.random().toString(36).substring(2, 12); // 10 chars
+}
+
+function isExpired(game) {
+  return game.expiresAt && game.expiresAt < Date.now();
+}
 
 // ---------- AUTH MIDDLEWARE ----------
 function auth(req, res, next) {
@@ -51,20 +59,21 @@ app.post("/api/login", (req, res) => {
   if (!user || user.password !== password) {
     return res.status(400).json({ error: "Invalid credentials" });
   }
-  const token = uuidv4();
+  const token = shortId() + shortId();
   sessions[token] = username;
   res.json({ token, username });
 });
 
 // ---------- GAME ROUTES ----------
 app.post("/api/game/create", auth, (req, res) => {
-  const id = uuidv4();
+  const id = shortId();
   games[id] = {
     id,
     players: [req.username],
     boardState: null,
     currentPlayer: "X",
-    winner: null
+    winner: null,
+    expiresAt: Date.now() + 2 * 60 * 1000 // 2 minutes
   };
   res.json({ gameId: id });
 });
@@ -73,6 +82,12 @@ app.post("/api/game/join", auth, (req, res) => {
   const { gameId } = req.body;
   const game = games[gameId];
   if (!game) return res.status(404).json({ error: "Game not found" });
+
+  if (isExpired(game)) {
+    delete games[gameId];
+    return res.status(410).json({ error: "Game expired" });
+  }
+
   if (game.players.length >= 2) return res.status(400).json({ error: "Game full" });
   if (!game.players.includes(req.username)) {
     game.players.push(req.username);
@@ -83,6 +98,12 @@ app.post("/api/game/join", auth, (req, res) => {
 app.get("/api/game/:id", auth, (req, res) => {
   const game = games[req.params.id];
   if (!game) return res.status(404).json({ error: "Game not found" });
+
+  if (isExpired(game)) {
+    delete games[req.params.id];
+    return res.status(410).json({ error: "Game expired" });
+  }
+
   res.json(game);
 });
 
@@ -107,6 +128,11 @@ function botMove(game) {
 app.post("/api/game/:id/state", auth, (req, res) => {
   const game = games[req.params.id];
   if (!game) return res.status(404).json({ error: "Game not found" });
+
+  if (isExpired(game)) {
+    delete games[req.params.id];
+    return res.status(410).json({ error: "Game expired" });
+  }
 
   const { boardState, currentPlayer, winner } = req.body;
   game.boardState = boardState;
@@ -135,13 +161,14 @@ app.post("/api/game/:id/state", auth, (req, res) => {
 
 // play vs bot
 app.post("/api/game/bot", auth, (req, res) => {
-  const id = uuidv4();
+  const id = shortId();
   games[id] = {
     id,
     players: [req.username, "BOT"],
     boardState: null,
     currentPlayer: "X",
-    winner: null
+    winner: null,
+    expiresAt: Date.now() + 2 * 60 * 1000
   };
   res.json({ gameId: id });
 });
@@ -213,7 +240,7 @@ app.post("/api/challenge/send", auth, (req, res) => {
   if (!users[to]) return res.status(404).json({ error: "User not found" });
   if (to === from) return res.status(400).json({ error: "Cannot challenge yourself" });
 
-  const id = uuidv4();
+  const id = shortId();
   challenges[id] = { id, from, to, status: "pending", gameId: null };
 
   users[to].challengeIncoming.push(id);
@@ -229,13 +256,14 @@ app.post("/api/challenge/accept", auth, (req, res) => {
   if (ch.to !== req.username) return res.status(403).json({ error: "Not your challenge" });
   if (ch.status !== "pending") return res.status(400).json({ error: "Already handled" });
 
-  const gameId = uuidv4();
+  const gameId = shortId();
   games[gameId] = {
     id: gameId,
     players: [ch.from, ch.to],
     boardState: null,
     currentPlayer: "X",
-    winner: null
+    winner: null,
+    expiresAt: Date.now() + 2 * 60 * 1000
   };
 
   ch.status = "accepted";
