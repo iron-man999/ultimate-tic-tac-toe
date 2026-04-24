@@ -4,52 +4,55 @@
   <meta charset="UTF-8">
   <title>Friends</title>
   <style>
+    :root {
+      --bg: #111;
+      --text: #eee;
+      --panel: #222;
+      --border: #444;
+      --button-bg: #444;
+      --button-hover: #666;
+      --accent: #2f7fff;
+    }
     body {
-      background:#111;
-      color:#eee;
+      background:var(--bg);
+      color:var(--text);
       font-family:system-ui;
       padding:20px;
     }
     input {
-      background:#222;
-      border:1px solid #555;
-      color:#eee;
+      background:var(--panel);
+      border:1px solid var(--border);
+      color:var(--text);
       padding:6px;
       margin-top:6px;
     }
-    :root {
-  --bg: #111;
-  --text: #eee;
-  --panel: #222;
-  --border: #444;
-  --accent: #2f7fff;
-  --x-color: #2f7fff;
-  --o-color: #ff3b3b;
-  --button-bg: #444;
-  --button-hover: #666;
-}
-
     button {
-      background:#444;
+      background:var(--button-bg);
       border:none;
-      color:#eee;
+      color:var(--text);
       padding:6px 12px;
       margin-left:6px;
       cursor:pointer;
       border-radius:4px;
     }
-    button:hover { background:#666; }
+    button:hover { background:var(--button-hover); }
     .box {
       margin-top:20px;
       padding:10px;
-      border:1px solid #444;
+      border:1px solid var(--border);
       border-radius:6px;
+      background:var(--panel);
+    }
+    a {
+      color:var(--accent);
+      text-decoration:none;
     }
   </style>
 </head>
 <body>
 
 <h1>Friends</h1>
+<a href="/">← Back to game</a>
 
 <div class="box">
   <h3>Add Friend</h3>
