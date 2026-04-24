@@ -26,10 +26,9 @@
       min-height:100vh;
       padding:20px;
       position:relative;
-      transition: background 0.6s ease; /* smooth change */
+      transition: background 0.6s ease;
     }
 
-    /* animated gradient when enabled */
     body.animated-bg {
       background: linear-gradient(120deg, #ff6b6b, #2f7fff, #2ecc71, #f1c40f);
       background-size: 400% 400%;
@@ -208,15 +207,6 @@
   </div>
 
   <div id="lobby" style="display:none;">
-    <!-- CHANGE PASSWORD UI -->
-<div style="margin-top:10px;">
-  <h3>Change Password</h3>
-  <input id="oldPass" type="password" placeholder="Old password">
-  <input id="newPass" type="password" placeholder="New password">
-  <button id="btnChangePass">Change Password</button>
-  <div id="passStatus"></div>
-</div>
-
     <h2>Lobby</h2>
     <div>Logged in as: <span id="currentUser"></span></div>
 
@@ -225,6 +215,16 @@
     <button id="btnJoinGame">Join Game</button>
     <button id="btnBotGame">Play vs Bot</button>
 
+    <!-- CHANGE PASSWORD UI -->
+    <div style="margin-top:10px;">
+      <h3>Change Password</h3>
+      <input id="oldPass" type="password" placeholder="Old password">
+      <input id="newPass" type="password" placeholder="New password">
+      <button id="btnChangePass">Change Password</button>
+      <div id="passStatus"></div>
+    </div>
+
+    <!-- THEME CONTROLS -->
     <div id="themeControls">
       <div>
         <label>Background:</label>
@@ -290,8 +290,10 @@ const bigBoard = Array.from({ length: 3 }, () =>
   Array.from({ length: 3 }, () => null)
 );
 
+// AUTO-JOIN SUPPORT
 const urlParams = new URLSearchParams(window.location.search);
 const joinId = urlParams.get("join");
+
 if (joinId) {
   const wait = setInterval(() => {
     if (authToken) {
@@ -320,6 +322,7 @@ async function joinGameByLink(gameId) {
   }
 }
 
+// AUTH
 document.getElementById("btnRegister").onclick = async () => {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value.trim();
@@ -361,6 +364,26 @@ document.getElementById("btnLogin").onclick = async () => {
   pollChallenges();
 };
 
+// CHANGE PASSWORD
+document.getElementById("btnChangePass").onclick = async () => {
+  const oldPassword = document.getElementById("oldPass").value;
+  const newPassword = document.getElementById("newPass").value;
+
+  const res = await fetch("/api/change-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-auth-token": authToken
+    },
+    body: JSON.stringify({ oldPassword, newPassword })
+  });
+
+  const data = await res.json();
+  document.getElementById("passStatus").textContent =
+    data.error || "Password changed successfully!";
+};
+
+// LOBBY
 document.getElementById("btnCreateGame").onclick = async () => {
   const res = await fetch("/api/game/create", {
     method: "POST",
@@ -421,6 +444,7 @@ document.getElementById("friendsShortcut").onclick = () => {
   window.location = "friends.html";
 };
 
+// GAME UI
 function startGameUI() {
   document.getElementById("lobby").style.display = "none";
   document.getElementById("game").style.display = "block";
@@ -429,6 +453,7 @@ function startGameUI() {
   pollGameState();
 }
 
+// GAME LOGIC
 function createBoard() {
   ultimateBoardEl.innerHTML = "";
   for (let br = 0; br < 3; br++) {
@@ -708,6 +733,7 @@ async function pollGameState() {
   setTimeout(pollGameState, 1000);
 }
 
+// LEADERBOARD
 async function refreshLeaderboard() {
   const res = await fetch("/api/leaderboard");
   const data = await res.json();
@@ -729,6 +755,7 @@ async function refreshLeaderboard() {
 
 document.getElementById("btnRefreshLeaderboard").onclick = refreshLeaderboard;
 
+// CHALLENGES PANEL
 async function pollChallenges() {
   if (!authToken) return;
   const res = await fetch("/api/challenge/list", {
@@ -742,9 +769,11 @@ async function pollChallenges() {
   incomingDiv.innerHTML = "";
   outgoingDiv.innerHTML = "";
 
+  // Incoming challenges
   data.incoming.forEach(ch => {
     const div = document.createElement("div");
     div.textContent = `${ch.from} (${ch.status}) `;
+
     if (ch.status === "pending") {
       const acceptBtn = document.createElement("button");
       acceptBtn.textContent = "Accept";
@@ -764,6 +793,7 @@ async function pollChallenges() {
           alert(d.error || "Could not accept challenge");
         }
       };
+
       const declineBtn = document.createElement("button");
       declineBtn.textContent = "Decline";
       declineBtn.onclick = async () => {
@@ -777,12 +807,15 @@ async function pollChallenges() {
         });
         pollChallenges();
       };
+
       div.appendChild(acceptBtn);
       div.appendChild(declineBtn);
     }
+
     incomingDiv.appendChild(div);
   });
 
+  // Outgoing challenges
   data.outgoing.forEach(ch => {
     const div = document.createElement("div");
     div.textContent = `To ${ch.to} (${ch.status})`;
@@ -831,12 +864,13 @@ function setupAnimatedBackgroundToggle() {
   });
 }
 
+// INIT
 createBoard();
 setupColorPicker("bgPicker", "--bg", "bgColor");
 setupColorPicker("xPicker", "--x-color", "xColor");
 setupColorPicker("oPicker", "--o-color", "oColor");
 setupAnimatedBackgroundToggle();
 </script>
-
+  
 </body>
 </html>
